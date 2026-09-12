@@ -3961,35 +3961,216 @@ document.addEventListener(
         "Adding to cart...";
 
 
-      var url =
-        "/?add-to-cart=" +
-        encodeURIComponent(
-          product.id
-        ) +
-        String.fromCharCode(38) + "quantity=" +
-        encodeURIComponent(
-          qty
-        );
+      /*
+        IMPORTANT:
+        Add the product using WooCommerce AJAX.
+        The product page will NOT reload.
+
+        This code intentionally avoids the JavaScript
+        && operator because HTML editors can encode
+        ampersands into entities such as &#038;.
+        Those entities are invalid inside JavaScript.
+      */
+
+      var ajaxUrl =
+        "";
+
+
+      if (
+        window.wc_add_to_cart_params
+      ) {
+
+        if (
+          window.wc_add_to_cart_params.wc_ajax_url
+        ) {
+
+          ajaxUrl =
+            window.wc_add_to_cart_params.wc_ajax_url
+              .toString()
+              .replace(
+                "%%endpoint%%",
+                "add_to_cart"
+              );
+
+        }
+
+      }
+
+
+      if (
+        !ajaxUrl
+      ) {
+
+        ajaxUrl =
+          "/?wc-ajax=add_to_cart";
+
+      }
+
+
+      var formData =
+        new FormData();
+
+
+      formData.append(
+        "product_id",
+        product.id
+      );
+
+
+      formData.append(
+        "quantity",
+        qty
+      );
 
 
       fetch(
-        url,
+        ajaxUrl,
         {
           method:
-            "GET",
+            "POST",
 
           credentials:
-            "same-origin"
+            "same-origin",
+
+          body:
+            formData
         }
       )
 
+      .then(
+        function (
+          response
+        ) {
+
+          if (
+            !response.ok
+          ) {
+
+            throw new Error(
+              "Add to cart request failed: " +
+              response.status
+            );
+
+          }
+
+
+          return response.json();
+
+        }
+      )
 
       .then(
-        function () {
+        function (
+          data
+        ) {
+
+          if (
+            !data
+          ) {
+
+            throw new Error(
+              "Empty WooCommerce response."
+            );
+
+          }
 
 
-          message.textContent =
-            "Product added to cart.";
+          /*
+            If WooCommerce returns an error,
+            do not show a false success message.
+          */
+
+          if (
+            data.error
+          ) {
+
+            message.textContent =
+              "Unable to add product to cart.";
+
+            return;
+
+          }
+
+
+          /*
+            Apply WooCommerce cart fragments
+            without reloading the page.
+          */
+
+          if (
+            data.fragments
+          ) {
+
+            Object.keys(
+              data.fragments
+            ).forEach(
+              function (
+                selector
+              ) {
+
+                var elements =
+                  document.querySelectorAll(
+                    selector
+                  );
+
+
+                elements.forEach(
+                  function (
+                    element
+                  ) {
+
+                    var temp =
+                      document.createElement(
+                        "div"
+                      );
+
+
+                    temp.innerHTML =
+                      data.fragments[selector];
+
+
+                    var replacement =
+                      temp.firstElementChild;
+
+
+                    if (
+                      replacement
+                    ) {
+
+                      element.replaceWith(
+                        replacement
+                      );
+
+                    }
+
+                  }
+                );
+
+              }
+            );
+
+          }
+
+
+          /*
+            Notify WooCommerce scripts/plugins
+            that the product was added.
+          */
+
+          document.body.dispatchEvent(
+            new CustomEvent(
+              "added_to_cart",
+              {
+                detail: {
+                  fragments:
+                    data.fragments || {},
+
+                  cart_hash:
+                    data.cart_hash || ""
+                }
+              }
+            )
+          );
 
 
           document.dispatchEvent(
@@ -3998,21 +4179,32 @@ document.addEventListener(
             )
           );
 
+
+          message.textContent =
+            "Product added to cart.";
+
         }
       )
 
-
       .catch(
-        function () {
+        function (
+          error
+        ) {
+
+          console.error(
+            "Add to cart error:",
+            error
+          );
 
 
-          window.location.href =
-            url;
+          message.textContent =
+            "Unable to add product to cart.";
 
         }
       );
 
     }
+
 
 
     /* =================================================
