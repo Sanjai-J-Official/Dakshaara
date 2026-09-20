@@ -189,33 +189,6 @@
       </div>
 
 
-      <!-- ABOUT -->
-
-      <div id="dk-about-section" class="dk-section">
-
-        <button type="button" class="dk-section-button">
-
-          <span>
-            About the Product
-          </span>
-
-          <span class="dk-plus">
-            +
-          </span>
-
-        </button>
-
-
-        <div class="dk-section-body">
-
-          <div id="dk-about" class="dk-description">
-          </div>
-
-        </div>
-
-      </div>
-
-
       <!-- HIGHLIGHTS -->
 
       <div id="dk-highlights-section" class="dk-section">
@@ -236,6 +209,33 @@
         <div class="dk-section-body">
 
           <div id="dk-highlights" class="dk-description">
+          </div>
+
+        </div>
+
+      </div>
+
+
+      <!-- ABOUT -->
+
+      <div id="dk-about-section" class="dk-section">
+
+        <button type="button" class="dk-section-button">
+
+          <span>
+            About the Product
+          </span>
+
+          <span class="dk-plus">
+            +
+          </span>
+
+        </button>
+
+
+        <div class="dk-section-body">
+
+          <div id="dk-about" class="dk-description">
           </div>
 
         </div>
@@ -3501,14 +3501,53 @@ document.addEventListener(
         "";
 
 
-      document.getElementById(
-        "dk-about"
-      ).innerHTML =
-        description;
+      /*
+        Reset sections first so this renderer is safe if it
+        is ever called more than once.
+      */
+
+      showSection("dk-about-section");
+      showSection("dk-highlights-section");
+      showSection("dk-care-section");
+      showSection("dk-faq-section");
+      showSection("dk-disclaimer-section");
 
 
       /*
-        Highlights
+        ABOUT
+        Extract only the content under the
+        "About the Product" heading.
+      */
+
+      var aboutContent =
+        findHeadingSection(
+          description,
+          [
+            "about the product",
+            "about"
+          ]
+        );
+
+
+      if (aboutContent) {
+
+        document.getElementById(
+          "dk-about"
+        ).innerHTML =
+          aboutContent;
+
+      }
+      else {
+
+        hideSection(
+          "dk-about-section"
+        );
+
+      }
+
+
+      /*
+        HIGHLIGHTS
       */
 
       var highlightContent =
@@ -3522,9 +3561,7 @@ document.addEventListener(
         );
 
 
-      if (
-        highlightContent
-      ) {
+      if (highlightContent) {
 
         document.getElementById(
           "dk-highlights"
@@ -3542,7 +3579,7 @@ document.addEventListener(
 
 
       /*
-        Care
+        CARE
       */
 
       var careContent =
@@ -3556,9 +3593,7 @@ document.addEventListener(
         );
 
 
-      if (
-        careContent
-      ) {
+      if (careContent) {
 
         document.getElementById(
           "dk-care"
@@ -3578,8 +3613,15 @@ document.addEventListener(
       /*
         FAQ
 
-        Only show if
-        FAQ data exists.
+        The FAQ parser now supports normal WooCommerce
+        description HTML such as:
+
+        <h2>Frequently Asked Questions</h2>
+        <h3>Question?</h3>
+        <p>Answer.</p>
+
+        It also keeps backward compatibility with the old
+        data-faq-question / data-faq-answer format.
       */
 
       createFAQ(
@@ -3588,7 +3630,7 @@ document.addEventListener(
 
 
       /*
-        Disclaimer
+        DISCLAIMER
       */
 
       var disclaimerContent =
@@ -3600,9 +3642,7 @@ document.addEventListener(
         );
 
 
-      if (
-        disclaimerContent
-      ) {
+      if (disclaimerContent) {
 
         document.getElementById(
           "dk-disclaimer"
@@ -3772,15 +3812,86 @@ document.addEventListener(
         description;
 
 
-      var questions =
+      /*
+        FIRST: support the old custom FAQ format.
+      */
+
+      var customQuestions =
         temp.querySelectorAll(
           "[data-faq-question]"
         );
 
 
-      if (
-        questions.length === 0
+      if (customQuestions.length > 0) {
+
+        customQuestions.forEach(
+          function (
+            question
+          ) {
+
+            appendFaqItem(
+              faq,
+              question.textContent.trim(),
+              question.getAttribute(
+                "data-faq-answer"
+              ) || ""
+            );
+
+          }
+        );
+
+        showSection("dk-faq-section");
+        return;
+
+      }
+
+
+      /*
+        NORMAL WOOCOMMERCE FORMAT.
+
+        Find the FAQ H2, then read every H3/H4 question
+        and the content immediately following it until the
+        next H3/H4 or the next H2 section.
+      */
+
+      var headings =
+        temp.querySelectorAll(
+          "h2, h3, h4"
+        );
+
+
+      var faqHeading =
+        null;
+
+
+      for (
+        var i = 0;
+        i < headings.length;
+        i++
       ) {
+
+        var headingText =
+          headings[i].textContent
+            .trim()
+            .toLowerCase();
+
+
+        if (
+          headingText ===
+          "frequently asked questions"
+        ) {
+
+          faqHeading =
+            headings[i];
+
+          break;
+
+        }
+
+      }
+
+
+      if (!faqHeading) {
 
         hideSection(
           "dk-faq-section"
@@ -3791,87 +3902,315 @@ document.addEventListener(
       }
 
 
-      questions.forEach(
-        function (
-          question
+      var currentQuestion =
+        null;
+
+
+      var currentAnswer =
+        [];
+
+
+      var node =
+        faqHeading.nextElementSibling;
+
+
+      function flushFaq() {
+
+        if (
+          !currentQuestion
         ) {
 
+          return;
 
-          var questionText =
-            question.textContent
+        }
+
+        var answerHtml =
+          currentAnswer.join("").trim();
+
+
+        var answerText =
+          getPlainText(answerHtml)
+            .replace(/\s+/g, " ")
+            .trim();
+
+
+        appendFaqItem(
+          faq,
+          currentQuestion,
+          answerText
+        );
+
+
+        currentQuestion =
+          null;
+
+        currentAnswer =
+          [];
+
+      }
+
+
+      while (
+        node
+      ) {
+
+        var tag =
+          node.tagName.toLowerCase();
+
+
+        if (
+          tag === "h2"
+        ) {
+
+          break;
+
+        }
+
+
+        if (
+          tag === "h3" ||
+          tag === "h4"
+        ) {
+
+          flushFaq();
+
+          currentQuestion =
+            node.textContent
               .trim();
 
+        }
+        else if (
+          currentQuestion
+        ) {
 
-          var answer =
-            question.getAttribute(
-              "data-faq-answer"
-            ) ||
-            "";
-
-
-          var item =
-            document.createElement(
-              "div"
-            );
-
-
-          item.className =
-            "dk-faq-item";
-
-
-          item.innerHTML =
-
-            '<button type="button" class="dk-faq-question">' +
-
-            '<span>' +
-
-            escapeHtml(
-              questionText
-            ) +
-
-            '</span>' +
-
-            '<span class="dk-faq-symbol">+</span>' +
-
-            '</button>' +
-
-            '<div class="dk-faq-answer">' +
-
-            '<div class="dk-faq-answer-inner">' +
-
-            escapeHtml(
-              answer
-            ) +
-
-            '</div>' +
-
-            '</div>';
-
-
-          faq.appendChild(
-            item
+          currentAnswer.push(
+            node.outerHTML
           );
 
-
-          var button =
-            item.querySelector(
-              ".dk-faq-question"
-            );
+        }
 
 
-          button.addEventListener(
-            "click",
-            function () {
+        node =
+          node.nextElementSibling;
 
-              item.classList.toggle(
-                "open"
-              );
+      }
 
-            }
+
+      flushFaq();
+
+
+      /*
+        FALLBACK:
+        Some WordPress editors turn a question into a
+        paragraph containing <strong>. Support that too.
+      */
+
+      if (
+        faq.children.length === 0
+      ) {
+
+        createFAQFromStrongParagraphs(
+          faq,
+          temp,
+          faqHeading
+        );
+
+      }
+
+
+      if (
+        faq.children.length === 0
+      ) {
+
+        hideSection(
+          "dk-faq-section"
+        );
+
+      }
+      else {
+
+        showSection(
+          "dk-faq-section"
+        );
+
+      }
+
+    }
+
+
+    /* =================================================
+       FAQ ITEM
+    ================================================= */
+
+    function appendFaqItem(
+      faq,
+      questionText,
+      answerText
+    ) {
+
+      if (
+        !questionText
+      ) {
+
+        return;
+
+      }
+
+
+      var item =
+        document.createElement(
+          "div"
+        );
+
+
+      item.className =
+        "dk-faq-item";
+
+
+      item.innerHTML =
+
+        '<button type="button" class="dk-faq-question">' +
+
+        '<span>' +
+
+        escapeHtml(
+          questionText
+        ) +
+
+        '</span>' +
+
+        '<span class="dk-faq-symbol">+</span>' +
+
+        '</button>' +
+
+        '<div class="dk-faq-answer">' +
+
+        '<div class="dk-faq-answer-inner">' +
+
+        escapeHtml(
+          answerText || ""
+        ) +
+
+        '</div>' +
+
+        '</div>';
+
+
+      faq.appendChild(
+        item
+      );
+
+
+      var button =
+        item.querySelector(
+          ".dk-faq-question"
+        );
+
+
+      button.addEventListener(
+        "click",
+        function () {
+
+          item.classList.toggle(
+            "open"
           );
 
         }
       );
+
+    }
+
+
+    /* =================================================
+       FAQ STRONG-PARAGRAPH FALLBACK
+    ================================================= */
+
+    function createFAQFromStrongParagraphs(
+      faq,
+      temp,
+      faqHeading
+    ) {
+
+      var node =
+        faqHeading.nextElementSibling;
+
+
+      var question =
+        null;
+
+
+      var answer =
+        [];
+
+
+      function flush() {
+
+        if (!question) {
+
+          return;
+
+        }
+
+        appendFaqItem(
+          faq,
+          question,
+          answer.join(" ").trim()
+        );
+
+        question =
+          null;
+
+        answer =
+          [];
+
+      }
+
+
+      while (
+        node
+      ) {
+
+        var tag =
+          node.tagName.toLowerCase();
+
+
+        if (
+          tag === "h2"
+        ) {
+
+          break;
+
+        }
+
+        if (
+          tag === "p" &&
+          node.querySelector("strong")
+        ) {
+
+          flush();
+
+          question =
+            node.textContent
+              .trim();
+
+        }
+        else if (
+          question
+        ) {
+
+          answer.push(
+            node.textContent.trim()
+          );
+
+        }
+
+        node =
+          node.nextElementSibling;
+
+      }
+
+
+      flush();
 
     }
 
@@ -4584,6 +4923,29 @@ document.addEventListener(
 
 
       return div.innerHTML;
+
+    }
+
+
+    /* =================================================
+       SHOW SECTION
+    ================================================= */
+
+    function showSection(
+      id
+    ) {
+
+      var element =
+        document.getElementById(
+          id
+        );
+
+      if (element) {
+
+        element.style.display =
+          "";
+
+      }
 
     }
 
